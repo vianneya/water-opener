@@ -55,9 +55,9 @@ function doPost(e) {
   try {
     // Handle both JSON and FormData
     let body;
-    if (e.postData.type === 'application/json') {
+    if (e.postData && e.postData.type === 'application/json') {
       body = JSON.parse(e.postData.contents || '{}');
-    } else if (e.parameter.data) {
+    } else if (e.parameter && e.parameter.data) {
       // FormData sends as parameter
       body = JSON.parse(e.parameter.data);
     } else {
