@@ -1,10 +1,10 @@
 /** ---- Utilities ---- */
 function cors(output) {
-  return output
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type')
-    .setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  output.setMimeType(ContentService.MimeType.JSON);
+  output.setHeader('Access-Control-Allow-Origin', '*');
+  output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  output.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  return output;
 }
 function ok(data){ return cors(ContentService.createTextOutput(JSON.stringify({ ok:true, data }))); }
 function fail(msg){ return cors(ContentService.createTextOutput(JSON.stringify({ ok:false, error: String(msg) }))); }
