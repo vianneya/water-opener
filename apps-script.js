@@ -65,7 +65,10 @@ function doPost(e) {
     }
 
     const sh = getSheet_();
-    sh.appendRow([ new Date(), upc, bottle_id, person, note, device ]);
+    // Create timestamp in EST/EDT timezone
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    sh.appendRow([ estTime, upc, bottle_id, person, note, device ]);
 
     return ok({ saved: true, upc, bottle_id });
   } catch (err) {
@@ -110,7 +113,7 @@ function doGet(e) {
     }
 
     if (action === 'today') {
-      const tz = Session.getScriptTimeZone() || 'America/New_York';
+      const tz = 'America/New_York'; // Force EST/EDT timezone
       const todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
       const filtered = rows.filter(r =>
         Utilities.formatDate(new Date(r.timestamp), tz, 'yyyy-MM-dd') === todayStr
