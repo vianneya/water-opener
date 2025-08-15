@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Water Opener</title>
+<style>
+  :root { --pad: 14px; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: var(--pad); max-width: 860px; margin: 0 auto; }
+  h1 { margin: 0 0 8px; }
+  .row { margin: 10px 0; }
+  video { width: 100%; border-radius: 12px; background: #000; }
+  button, input { font: inherit; padding: 12px; border: 1px solid #ddd; border-radius: 10px; }
+  button { font-weight: 600; cursor: pointer; }
+  input { width: 100%; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pill { display:inline-block; padding:6px 10px; border:1px solid #ddd; border-radius:999px; font-size:.9rem; }
+  .card { border: 1px solid #eee; border-radius: 12px; padding: 12px; }
+  .muted { color: #666; font-size: .9rem; }
+  .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f6f6f6; padding:2px 6px; border-radius:6px; border:1px solid #e5e5e5; }
+  label { display:block; margin-bottom:6px; font-weight:600; }
+</style>
+</head>
+<body>
+  <h1>Which water did I open?</h1>
+  <div class="muted">Scan → enter name → auto-suggests <span class="kbd">-n</span> → Save</div>
+
+  <div class="row"><video id="preview" muted playsinline></video></div>
+
+  <div class="grid-2">
+    <button id="start">Start Scanner</button>
+    <button id="stop" disabled>Stop</button>
+  </div>
+
+  <div class="row">
+    <div class="pill" id="detected">No UPC yet</div>
+  </div>
+
+  <div class="row">
+    <label for="person">Enter name:</label>
+    <input id="person" placeholder="e.g., Vianney">
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <label for="suffix">Bottle # for this UPC</label>
+      <input id="suffix" inputmode="numeric" placeholder="Auto… e.g., 3">
+    </div>
+    <div>
+      <label for="bottleId">Bottle ID</label>
+      <input id="bottleId" readonly placeholder="UPC-n will appear here">
+    </div>
+  </div>
+
+  <div class="row">
+    <input id="note" placeholder="Optional note (e.g., kitchen counter)">
+  </div>
+
+  <div class="grid-2 row">
+    <button id="save" disabled>Log as Opened</button>
+    <button id="clearName">Clear Name</button>
+  </div>
+
+  <div id="status" class="row muted"></div>
+
+  <div class="grid-2 row">
+    <div class="card">
+      <strong>Last opened (overall)</strong>
+      <div id="lastOverall" class="muted">—</div>
+    </div>
+    <div class="card">
+      <strong>Last per person</strong>
+      <div id="lastPerPerson" class="muted">—</div>
+    </div>
+  </div>
+
+  <!-- ZXing -->
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+  <script>
+  // ======= CONFIG =======
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyYxI-p07U6As0Jq7uW9AJikIeFakG67F5ivLE0qoT7GBfm_sI8HWKgFCQgnpQzR2jKKA/exec';
+
+  // ======= STATE / HELPERS =======
+  const $ = id => document.getElementById(id);
+  const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+  let stream = null;
+  let lastUPC = null;
+
+  // UI elements
+  const preview = $('preview'),
+        startBtn = $('start'),
+        stopBtn = $('stop'),
+        saveBtn = $('save'),
+        detected = $('detected'),
+        status = $('status'),
+        note = $('note'),
+        personInput = $('person'),
+        suffixInp = $('suffix'),
+        bottleIdInp = $('bottleId');
+
+  function setStatus(msg){ status.textContent = msg || ''; }
+  function setDetected(msg){ detected.textContent = msg || 'No UPC yet'; }
+
+  // ======= Scanner =======
+  async function startScanner(){
+    try {
+      setStatus('Starting camera…');
+      startBtn.disabled = true; stopBtn.disabled = false;
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      preview.srcObject = stream; await preview.play();
+
+      await codeReader.decodeFromVideoDevice(null, preview, (result, err) => {
+        if (result) {
+          const text = result.getText();
+          const digits = text.replace(/\D/g,''); // keep digits only
+          if (!digits) return;
+          lastUPC = digits;
+          setDetected('UPC: ' + lastUPC);
+          saveBtn.disabled = false;
+          suggestNextIndex(lastUPC);
+        }
+      });
+      setStatus('Point camera at the barcode.');
+    } catch (e) {
+      setStatus('Camera error: ' + e.message);
+      startBtn.disabled = false; stopBtn.disabled = true;
+    }
+  }
+  async function stopScanner(){
+    try {
+      codeReader.reset();
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    } finally {
+      startBtn.disabled = false; stopBtn.disabled = true;
+      setStatus('Scanner stopped.');
+    }
+  }
+
+  // ======= API helpers =======
+  async function apiGet(params){
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
+    return res.json();
+  }
+  async function apiPost(payload){
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  }
+
+  async function refreshSummaries(){
+    try {
+      const [last, per] = await Promise.all([
+        apiGet({ action: 'last' }),
+        apiGet({ action: 'lastPerPerson' })
+      ]);
+      if (last.ok) {
+        $('lastOverall').innerHTML = last.data
+          ? `${last.data.person || '—'} opened <span class="kbd">${last.data.bottle_id || '—'}</span><br><span class="muted">${new Date(last.data.timestamp).toLocaleString()}</span>`
+          : '—';
+      }
+      if (per.ok) {
+        const items = [];
+        for (const [p, row] of Object.entries(per.data)) {
+          items.push(`<div><strong>${p}:</strong> <span class="kbd">${row.bottle_id || '—'}</span> <span class="muted">(${new Date(row.timestamp).toLocaleString()})</span></div>`);
+        }
+        $('lastPerPerson').innerHTML = items.length ? items.join('') : '—';
+      }
+    } catch (e) {
+      setStatus('Load summary failed: ' + e.message);
+    }
+  }
+
+  async function suggestNextIndex(upc){
+    try {
+      suffixInp.value = '';
+      bottleIdInp.value = '';
+      const res = await apiGet({ action: 'nextIndex', upc });
+      if (res.ok) {
+        suffixInp.value = String(res.data);
+        bottleIdInp.value = `${upc}-${res.data}`;
+      } else {
+        setStatus('Could not suggest index: ' + (res.error || ''));
+      }
+    } catch (e) {
+      setStatus('Suggest failed: ' + e.message);
+    }
+  }
+
+  // Keep bottleId live when user edits suffix
+  suffixInp.addEventListener('input', () => {
+    if (!lastUPC) return;
+    const n = (suffixInp.value || '').replace(/\D/g,'');
+    suffixInp.value = n;
+    bottleIdInp.value = n ? `${lastUPC}-${n}` : '';
+  });
+
+  async function saveOpen(){
+    if (!lastUPC) return setStatus('Scan a UPC first.');
+    const name = personInput.value.trim();
+    if (!name) return setStatus('Enter a name.');
+
+    const n = (suffixInp.value || '').trim();
+    const payload = {
+      upc: lastUPC,
+      person: name,
+      note: note.value.trim(),
+      device: navigator.userAgent
+    };
+    if (n) payload.bottle_id = `${lastUPC}-${n}`; // let server compute if empty
+
+    setStatus('Saving…'); saveBtn.disabled = true;
+    try {
+      const res = await apiPost(payload);
+      if (!res.ok) throw new Error(res.error || 'Unknown error');
+      bottleIdInp.value = res.data?.bottle_id || bottleIdInp.value;
+      note.value = '';
+      setStatus('Logged ✅ ' + (res.data?.bottle_id ? `(${res.data.bottle_id})` : ''));
+      await refreshSummaries();
+    } catch (e) {
+      setStatus('Save failed: ' + e.message);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+  // Convenience
+  $('clearName').addEventListener('click', () => { personInput.value = ''; personInput.focus(); });
+
+  // Init
+  refreshSummaries();
+  startBtn.addEventListener('click', startScanner);
+  stopBtn.addEventListener('click', stopScanner);
+  $('save').addEventListener('click', saveOpen);
+  </script>
+</body>
+</html> 
