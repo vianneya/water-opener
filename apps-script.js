@@ -6,7 +6,13 @@ function cors(data) {
 }
 function ok(data){ return cors({ ok:true, data }); }
 function fail(msg){ return cors({ ok:false, error: String(msg) }); }
-function doOptions() { return cors(''); }
+
+// Handle CORS preflight requests
+function doOptions() {
+  return ContentService
+    .createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT);
+}
 
 function getSheet_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Log');
@@ -47,7 +53,17 @@ function nextIndexForUPC_(upc, rows) {
  */
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents || '{}');
+    // Handle both JSON and FormData
+    let body;
+    if (e.postData.type === 'application/json') {
+      body = JSON.parse(e.postData.contents || '{}');
+    } else if (e.parameter.data) {
+      // FormData sends as parameter
+      body = JSON.parse(e.parameter.data);
+    } else {
+      body = e.parameter || {};
+    }
+    
     const upc = String(body.upc || '').trim();
     if (!upc) throw new Error('Missing upc');
 

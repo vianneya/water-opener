@@ -29,3 +29,5 @@ node_modules/
 .env
 .env.local
 .env.production 
+# Local Netlify folder
+.netlify

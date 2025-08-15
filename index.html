@@ -159,10 +159,14 @@
     try {
       console.log('POST payload:', payload);
       console.log(`POST: ${APPS_SCRIPT_URL}`);
+      
+      // Use FormData to avoid CORS preflight
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(payload));
+      
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: formData,
         redirect: 'follow',
         mode: 'cors'
       });
