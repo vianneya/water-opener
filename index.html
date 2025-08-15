@@ -139,14 +139,19 @@
   // ======= API helpers =======
   async function apiGet(params){
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`);
+    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
+      redirect: 'follow',
+      mode: 'cors'
+    });
     return res.json();
   }
   async function apiPost(payload){
     const res = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      mode: 'cors'
     });
     return res.json();
   }
