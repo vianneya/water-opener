@@ -1,14 +1,12 @@
 /** ---- Utilities ---- */
-function cors(output) {
-  output.setMimeType(ContentService.MimeType.JSON);
-  output.setHeader('Access-Control-Allow-Origin', '*');
-  output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  output.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  return output;
+function cors(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
-function ok(data){ return cors(ContentService.createTextOutput(JSON.stringify({ ok:true, data }))); }
-function fail(msg){ return cors(ContentService.createTextOutput(JSON.stringify({ ok:false, error: String(msg) }))); }
-function doOptions() { return cors(ContentService.createTextOutput('')); }
+function ok(data){ return cors({ ok:true, data }); }
+function fail(msg){ return cors({ ok:false, error: String(msg) }); }
+function doOptions() { return cors(''); }
 
 function getSheet_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Log');
