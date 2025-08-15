@@ -138,34 +138,68 @@
 
   // ======= API helpers =======
   async function apiGet(params){
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
-      redirect: 'follow',
-      mode: 'cors'
-    });
-    return res.json();
+    try {
+      const qs = new URLSearchParams(params).toString();
+      console.log(`GET: ${APPS_SCRIPT_URL}?${qs}`);
+      const res = await fetch(`${APPS_SCRIPT_URL}?${qs}`, {
+        redirect: 'follow',
+        mode: 'cors'
+      });
+      console.log('GET Response status:', res.status, res.statusText);
+      console.log('GET Response headers:', [...res.headers.entries()]);
+      const data = await res.json();
+      console.log('GET Response data:', data);
+      return data;
+    } catch (error) {
+      console.error('GET Error:', error);
+      throw error;
+    }
   }
   async function apiPost(payload){
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      redirect: 'follow',
-      mode: 'cors'
-    });
-    return res.json();
+    try {
+      console.log('POST payload:', payload);
+      console.log(`POST: ${APPS_SCRIPT_URL}`);
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        mode: 'cors'
+      });
+      console.log('POST Response status:', res.status, res.statusText);
+      console.log('POST Response headers:', [...res.headers.entries()]);
+      const responseText = await res.text();
+      console.log('POST Response text:', responseText);
+      
+      // Try to parse as JSON
+      try {
+        const data = JSON.parse(responseText);
+        console.log('POST Response data:', data);
+        return data;
+      } catch (parseError) {
+        console.error('JSON Parse Error:', parseError);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
+      }
+    } catch (error) {
+      console.error('POST Error:', error);
+      throw error;
+    }
   }
 
   async function refreshSummaries(){
     try {
+      console.log('Refreshing summaries...');
       const [last, per] = await Promise.all([
         apiGet({ action: 'last' }),
         apiGet({ action: 'lastPerPerson' })
       ]);
+      console.log('Summary responses:', { last, per });
       if (last.ok) {
         $('lastOverall').innerHTML = last.data
           ? `${last.data.person || '—'} opened <span class="kbd">${last.data.bottle_id || '—'}</span><br><span class="muted">${new Date(last.data.timestamp).toLocaleString()}</span>`
           : '—';
+      } else {
+        console.error('Last summary error:', last.error);
       }
       if (per.ok) {
         const items = [];
@@ -173,8 +207,11 @@
           items.push(`<div><strong>${p}:</strong> <span class="kbd">${row.bottle_id || '—'}</span> <span class="muted">(${new Date(row.timestamp).toLocaleString()})</span></div>`);
         }
         $('lastPerPerson').innerHTML = items.length ? items.join('') : '—';
+      } else {
+        console.error('Per person summary error:', per.error);
       }
     } catch (e) {
+      console.error('Summary refresh error:', e);
       setStatus('Load summary failed: ' + e.message);
     }
   }
